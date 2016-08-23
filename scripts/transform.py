@@ -4,7 +4,7 @@
 import os
 import cv2 as cv
 import numpy as np
-
+import pdb
 
 class Transform(object):
 
@@ -12,9 +12,12 @@ class Transform(object):
         self.args = args
 
     def transform(self, datum, datadir, fname_index=0, joint_index=1):
-        img_fn = '%s/images/%s' % (datadir, datum[fname_index])
+        img_fn = '%s/%s' % (datadir, datum[fname_index])
+	
         if not os.path.exists(img_fn):
-            raise Exception('%s is not exist' % img_fn)
+            img_fn = datum[fname_index]
+	    if not os.path.exists(img_fn):
+            	raise Exception('%s is not exist' % img_fn)
 
         self.img = cv.imread(img_fn)
         self.joints = np.asarray([int(float(p)) for p in datum[joint_index:]])
@@ -38,6 +41,52 @@ class Transform(object):
         self.joints = joints.flatten()
 
         return self.img, self.joints
+
+    def transform_vid_frame(self, img_fn, fname_index=0):
+
+        if not os.path.exists(img_fn):
+            raise Exception('%s is not exist' % img_fn)
+
+        self.img = cv.imread(img_fn)
+
+        if self.args.cropping == 1:
+            self.cropping
+        if self.args.flip == 1:
+            self.fliplr()
+        if self.args.size > 0:
+            self.resize_vid()
+        if self.args.lcn == 1:
+            self.contrast()
+
+        return self.img
+
+    def cropping_vid(self):
+        # image cropping
+        
+        x, y, w, h = 230, 150, 270, 320
+
+        # bounding rect extending
+        inf, sup = self.args.crop_pad_inf, self.args.crop_pad_sup
+        r = sup - inf
+        pad_w_r = np.random.rand() * r + inf  # inf~sup
+        pad_h_r = np.random.rand() * r + inf  # inf~sup
+        x -= (w * pad_w_r - w) / 2
+        y -= (h * pad_h_r - h) / 2
+        w *= pad_w_r
+        h *= pad_h_r
+
+        # shifting
+        x += np.random.rand() * self.args.shift * 2 - self.args.shift
+        y += np.random.rand() * self.args.shift * 2 - self.args.shift
+
+        # clipping
+        x, y, w, h = [int(z) for z in [x, y, w, h]]
+        x = np.clip(x, 0, self.img.shape[1] - 1)
+        y = np.clip(y, 0, self.img.shape[0] - 1)
+        w = np.clip(w, 1, self.img.shape[1] - (x + 1))
+        h = np.clip(h, 1, self.img.shape[0] - (y + 1))
+        self.img = self.img[y:y + h, x:x + w]
+	
 
     def cropping(self):
         # image cropping
@@ -69,6 +118,13 @@ class Transform(object):
         # joint shifting
         joints = np.asarray([(j[0] - x, j[1] - y) for j in joints])
         self.joints = joints.flatten()
+
+    def resize_vid(self):
+        if not isinstance(self.args.size, int):
+            raise Exception('self.size should be int')
+        orig_h, orig_w, _ = self.img.shape
+        self.img = cv.resize(self.img, (self.args.size, self.args.size),
+                             interpolation=cv.INTER_NEAREST)
 
     def resize(self):
         if not isinstance(self.args.size, int):

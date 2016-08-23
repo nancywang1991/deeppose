@@ -21,8 +21,8 @@ from cmd_options import get_arguments
 
 
 def load_dataset(args):
-    train_fn = '%s/train_joints.csv' % args.datadir
-    test_fn = '%s/test_joints.csv' % args.datadir
+    train_fn = '%s/train_joints_all_sbj.csv' % args.datadir
+    test_fn = '%s/test_joints_all_sbj.csv' % args.datadir
     train_dl = np.array([l.strip() for l in open(train_fn).readlines()])
     test_dl = np.array([l.strip() for l in open(test_fn).readlines()])
 

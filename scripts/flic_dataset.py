@@ -4,7 +4,7 @@
 from __future__ import print_function
 import numpy as np
 from scipy.io import loadmat
-
+import pdb
 crop_sizes = {
     '12-oc': (0, 0),
     'along': (0, 0),
@@ -39,10 +39,10 @@ def get_joint_list(joints):
 
 
 def save_crop_images_and_joints():
-    training_indices = loadmat('data/FLIC-full/tr_plus_indices.mat')
+    training_indices = loadmat('data/FLIC-full/tr_plus_indices_patients_all.mat')
     training_indices = training_indices['tr_plus_indices'].flatten()
 
-    examples = loadmat('data/FLIC-full/examples.mat')
+    examples = loadmat('data/FLIC-full/examples_patients_all.mat')
     examples = examples['examples'][0]
     joint_ids = ['lsho', 'lelb', 'lwri', 'rsho', 'relb', 'rwri', 'lhip',
                  'lkne', 'lank', 'rhip', 'rkne', 'rank', 'leye', 'reye',
@@ -58,15 +58,15 @@ def save_crop_images_and_joints():
                      'leye', 'reye', 'nose',
                      'rsho', 'relb', 'rwri']
 
-    fp_train = open('data/FLIC-full/train_joints.csv', 'w')
-    fp_test = open('data/FLIC-full/test_joints.csv', 'w')
+    fp_train = open('data/FLIC-full/train_joints_all_sbj.csv', 'w')
+    fp_test = open('data/FLIC-full/test_joints_all_sbj.csv', 'w')
     for i, example in enumerate(examples):
         joint = example[2].T
         joint = dict(zip(joint_ids, joint))
         fname = example[3][0]
         joint = get_joint_list(joint)
         msg = '{},{}'.format(fname, ','.join([str(j) for j in joint.tolist()]))
-        if i in training_indices:
+        if (i+1) in training_indices:
             print(msg, file=fp_train)
         else:
             print(msg, file=fp_test)

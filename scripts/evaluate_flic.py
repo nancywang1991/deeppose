@@ -14,6 +14,8 @@ import cv2 as cv
 from chainer import cuda, serializers, Variable
 from transform import Transform
 from test_flic_dataset import draw_joints
+import pdb
+import csv
 
 
 def load_model(args):
@@ -40,6 +42,21 @@ def load_data(trans, args, x):
                                args.fname_index, args.joint_index)
         input_data[i] = d.transpose((2, 0, 1))
         label[i] = t
+
+    return input_data, label
+
+def load_data_demo(trans, args, x):
+    c = args.channel
+    s = args.size
+    d = args.joint_num * 2
+
+    # data augmentation
+    input_data = np.zeros((len(x), c, s, s))
+    label = np.zeros((len(x), d))
+
+    for i, line in enumerate(x):
+        img = trans.transform_vid_frame(line)
+        input_data[i] = img.transpose((2, 0, 1))
 
     return input_data, label
 
@@ -120,7 +137,7 @@ def test(args):
             img_label, label = trans.revert(img, label)
 
             # calc mean_error
-            error = np.linalg.norm(pred - label) / len(pred)
+            error = np.mean(np.linalg.norm(pred - label, axis=1))
             mean_error += error
 
             # create pred, label tuples
@@ -139,12 +156,77 @@ def test(args):
                 i + n, N, img_fn, error, mean_error / (i + n + 1))
             print(msg, file=fp)
             print(msg)
-
-            fn, ext = os.path.splitext(img_fn)
+            fn, ext = os.path.splitext(img_fn.split('/')[-1])
             tr_fn = '%s/%d-%d_%s_pred%s' % (out_dir, i, n, fn, ext)
             la_fn = '%s/%d-%d_%s_label%s' % (out_dir, i, n, fn, ext)
             cv.imwrite(tr_fn, img_pred)
             cv.imwrite(la_fn, img_label)
+
+def demo(args):
+    # augmentation setting
+    trans = Transform(args)
+
+    # test data
+    test_dl = sorted(glob.glob('%s/*' % args.datadir))
+
+    # load model
+    if args.gpu >= 0:
+        cuda.get_device(args.gpu).use()
+    model = load_model(args)
+    if args.gpu >= 0:
+        model.to_gpu()
+    else:
+        model.to_cpu()
+
+    # create output dir
+    epoch = int(re.search('epoch-([0-9]+)', args.param).groups()[0])
+    
+    out_dir = '%s/' % (args.resultdir)
+    if not os.path.exists(out_dir):
+        os.makedirs(out_dir)
+    out_log = '%s.log' % out_dir
+    fp = open(out_log, 'w')
+
+    N = len(test_dl)
+    with open('%s/joint_coords.csv' % out_dir, 'wb') as csvfile:
+        writer = csv.writer(csvfile)
+
+        for i in range(0, N, args.batchsize):
+            lines = test_dl[i:i + args.batchsize]
+            input_data, labels = load_data_demo(trans, args, lines)
+
+            if args.gpu >= 0:
+                input_data = cuda.to_gpu(input_data.astype(np.float32))
+                labels = cuda.to_gpu(labels.astype(np.float32))
+
+            x = Variable(input_data, volatile=True)
+            t = Variable(labels, volatile=True)
+            model(x, t)
+
+            if args.gpu >= 0:
+                preds = cuda.to_cpu(model.pred.data)
+                input_data = cuda.to_cpu(input_data)
+                labels = cuda.to_cpu(labels)
+
+            for n, line in enumerate(lines):
+                img_fn = line.split(',')[args.fname_index]
+                img = input_data[n].transpose((1, 2, 0))
+                pred = preds[n]
+                img_pred, pred = trans.revert(img, pred)
+
+                # create pred
+                img_pred = np.array(img_pred.copy())
+                pred = [tuple(p) for p in pred]
+                writer.writerow(pred)
+                # all limbs
+
+                img_pred = draw_joints(
+                    img_pred, pred, args.draw_limb, args.text_scale)
+
+                fn, ext = os.path.splitext(img_fn.split('/')[-1])
+                tr_fn = '%s/%s_pred%s' % (out_dir, fn, ext)
+
+                cv.imwrite(tr_fn, img_pred)
 
 
 def tile(args):
@@ -171,8 +253,9 @@ if __name__ == '__main__':
     parser.add_argument('--batchsize', type=int, default=128)
     parser.add_argument('--gpu', type=int, default=0)
     parser.add_argument('--datadir', type=str, default='data/FLIC-full')
+    parser.add_argument('--resultdir',type=str, default='result/transformations')
     parser.add_argument('--mode', type=str, default='test',
-                        choices=['test', 'tile'],
+                        choices=['test', 'tile', 'demo'],
                         help='test or create tiled image')
     parser.add_argument('--n_imgs', type=int, default=9,
                         help='how many images will be tiled')
@@ -184,7 +267,7 @@ if __name__ == '__main__':
 
     parser.add_argument('--flip', type=int, default=0,
                         help='flip left and right for data augmentation')
-    parser.add_argument('--cropping', type=int, default=1)
+    parser.add_argument('--cropping', type=int, default=0)
     parser.add_argument('--size', type=int, default=220,
                         help='resizing')
     parser.add_argument('--lcn', type=bool, default=True,
@@ -215,3 +298,5 @@ if __name__ == '__main__':
     elif args.mode == 'tile':
         np.random.seed(args.seed)
         tile(args)
+    elif args.mode == 'demo':
+        demo(args)

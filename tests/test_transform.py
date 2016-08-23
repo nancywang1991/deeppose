@@ -10,7 +10,7 @@ import sys
 sys.path.append('scripts')
 from transform import Transform
 from test_flic_dataset import draw_joints
-
+import glob
 
 def load_data(trans, args, x):
     img_fn = '%s/images/%s' % (args.data_dir, x.split(',')[args.fname_index])
@@ -60,13 +60,14 @@ if __name__ == '__main__':
     trans = Transform(args)
 
     # test data
-    test_fn = '%s/test_joints.csv' % args.data_dir
-    test_dl = np.array([l.strip() for l in open(test_fn).readlines()])
+    #test_fn = '%s/test_joints.csv' % args.data_dir
+    #test_dl = np.array([l.strip() for l in open(test_fn).readlines()])
 
-    result_dir = '%s/test_trans' % args.data_dir
+    result_dir = '%s/test_trans/' % args.data_dir
     if not os.path.exists(result_dir):
         os.makedirs(result_dir)
-    for i, line in enumerate(test_dl):
+    #for i, line in enumerate(test_dl):
+     for i, line in enumerate(glob.glob('%s/images/*' % args.data_dir)):
         orig, input_data, label = load_data(trans, args, line)
         input_data = input_data.transpose((0, 2, 3, 1))[0].astype(np.float32)
         label = label.astype(np.float32).flatten()
