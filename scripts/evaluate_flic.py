@@ -212,6 +212,7 @@ def demo(args):
                 img_fn = line.split(',')[args.fname_index]
                 img = input_data[n].transpose((1, 2, 0))
                 pred = preds[n]
+                pdb.set_trace()
                 img_pred, pred = trans.revert(img, pred)
 
                 # create pred
